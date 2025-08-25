@@ -1,0 +1,134 @@
+services:
+  # The Nginx service to serve your Laravel project.
+  nginx:
+    image: nginx:alpine
+    container_name: laragon-multi-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./projects/ees:/var/www/html/ees
+      - ./projects/emms:/var/www/html/emms
+      # - ./projects/jobAttendance:/var/www/html/jobAttendance
+      - ./projects/service-desk:/var/www/html/service-desk
+      
+      - ./nginx/sites-enabled:/etc/nginx/conf.d
+    depends_on:
+      - postgres
+    networks:
+      - laravel_network
+
+  php-82:
+    build:
+      context: .
+      dockerfile: Dockerfile.php
+    container_name: php-82
+    volumes:
+      - ./projects/ees:/var/www/html/ees
+    networks:
+      - laravel_network
+    depends_on:
+      - nginx
+  php-84:
+    build:
+      context: .
+      dockerfile: Dockerfile.php-84
+    container_name: php-84
+    volumes:
+      - ./projects/emms:/var/www/html/emms
+      - ./projects/service-desk:/var/www/html/service-desk
+      # - ./projects/jobAttendance:/var/www/html/jobAttendance
+    networks:
+      - laravel_network
+    depends_on:
+      - nginx
+    ports:
+      - 8000:8000
+
+  # The PostgreSQL database service.
+  postgres:
+    image:  postgis/postgis:15-master #wodby/postgres:$POSTGRES_TAG
+    container_name: laragon-postgres
+    command: ["postgres", "-c", "log_statement=all", "-c", "log_destination=stderr"]
+    restart: always
+    environment:
+      POSTGRES_USER: ees
+      POSTGRES_PASSWORD: root
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+      # - ./postgres-init:/docker-entrypoint-initdb.d # Place init file(s) here.
+    networks:
+      - laravel_network
+    ports:
+      - "5432:5432"
+
+  # The MySQL database service.
+  # mysql:
+  #   image: mysql:8.0
+  #   container_name: laragon-mysql
+  #   restart: always
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: root
+  #     MYSQL_DATABASE: laravel
+  #     MYSQL_USER: user
+  #     MYSQL_PASSWORD: password
+  #   volumes:
+  #     - mysql_data:/var/lib/mysql
+  #   networks:
+  #     - laravel_network
+  #   ports:
+  #     - "3306:3306"
+
+  # # The MongoDB database service.
+  # mongo:
+  #   image: mongo:latest
+  #   container_name: laragon-mongo
+  #   restart: always
+  #   environment:
+  #     MONGO_INITDB_ROOT_USERNAME: root
+  #     MONGO_INITDB_ROOT_PASSWORD: rootpassword
+  #   volumes:
+  #     - mongo_data:/data/db
+  #   networks:
+  #     - laravel_network
+  #   ports:
+  #     - "27017:27017"
+
+  # The Redis service for caching and queues.
+  redis:
+    image: redis:alpine
+    container_name: laragon-redis
+    networks:
+      - laravel_network
+    ports:
+      - "6379:6379"
+
+
+  # The Node.js service for asset compilation.
+  node:
+    image: node:22-alpine
+    container_name: node
+    volumes: 
+      - ./projects:/var/www/html
+    working_dir: /var/www/html
+    command: tail -f /dev/null
+    # for php 8.4
+    # cd to project
+    #npm install && npm run dev -- --host 0.0.0.0
+    networks:
+      - laravel_network
+    ports:
+      - "5173:5173"
+
+# Defines a custom network for all services
+networks:
+  laravel_network:
+    driver: bridge
+
+# Defines a volume for database data persistence
+volumes:
+  postgres_data:
+    driver: local
+  # mysql_data:
+  #   driver: local
+  # mongo_data:
+  #   driver: local

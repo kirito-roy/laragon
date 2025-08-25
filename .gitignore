@@ -1,0 +1,9 @@
+
+postgres-init
+postgres_data
+
+projects/*
+!projects/README.md
+nginx/sites-enabled/*
+nginx/sites-disable/*
+!nginx/sites-enabled/README.md

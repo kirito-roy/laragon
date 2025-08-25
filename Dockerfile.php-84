@@ -1,0 +1,66 @@
+# Use the official PHP 8.4 FPM image, which is based on Debian
+FROM php:8.4-fpm
+
+# Set the working directory for the application
+WORKDIR /var/www/html
+
+# Install system dependencies and PHP extensions for a typical Laravel project
+# We use a single RUN command to keep the image size small by leveraging layer caching.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    git \
+    libzip-dev \
+    # System dependencies for extensions
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype-dev \
+    libpq-dev \
+    libsqlite3-dev \
+    libicu-dev \
+    libxml2-dev \
+    libxslt-dev \
+    libonig-dev \
+    libcurl4-openssl-dev \
+    libmagickwand-dev \
+    libmemcached-dev \
+    librabbitmq-dev \
+    bison \
+    && \
+    # Install PECL extensions
+    pecl install redis memcached imagick amqp && \
+    docker-php-ext-enable redis memcached imagick amqp && \
+    # Clean up the apt cache to reduce image size
+    rm -rf /var/lib/apt/lists/* && \
+    # Configure GD with FreeType and JPEG support
+    docker-php-ext-configure gd --with-freetype --with-jpeg && \
+    # Install PHP extensions
+    docker-php-ext-install -j$(nproc) \
+    bcmath \
+    curl \
+    exif \
+    gd \
+    intl \
+    mbstring \
+    opcache \
+    pcntl \
+    pdo_mysql \
+    pdo_pgsql \
+    pdo_sqlite \
+    soap \
+    sockets \
+    xml \
+    xsl \
+    zip && \
+    # Install Composer
+    curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+# Set a non-root user for security and consistency
+RUN groupadd -g 1000 laravel && \
+    useradd -u 1000 -g laravel -s /bin/bash -m laravel
+
+# Switch to the non-root user
+USER laravel
+
+
+COPY --from=composer:latest /usr/bin/composer /usr/local/bin/composer
+
