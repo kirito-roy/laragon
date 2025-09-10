@@ -1,5 +1,6 @@
-ees
-emms
+
 postgres-init
 postgres_data
-service-desk
+
+projects/*
+!projects/README.md

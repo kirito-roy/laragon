@@ -6,25 +6,23 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./ees:/var/www/html/ees
-      - ./emms:/var/www/html/emms
-      - ./service-desk:/var/www/html/service-desk
+      - ./projects/ees:/var/www/html/ees
+      - ./projects/emms:/var/www/html/emms
+      - ./projects/service-desk:/var/www/html/service-desk
       
       - ./nginx/sites-enabled:/etc/nginx/conf.d
     depends_on:
       - postgres
-      # - eems-php
     networks:
       - laravel_network
 
-  # PHP-FPM service for the 'ees' project.
   php-82:
     build:
       context: .
       dockerfile: Dockerfile.php
     container_name: php-82
     volumes:
-      - ./ees:/var/www/html/ees
+      - ./projects/ees:/var/www/html/ees
     networks:
       - laravel_network
     depends_on:
@@ -35,36 +33,14 @@ services:
       dockerfile: Dockerfile.php-84
     container_name: php-84
     volumes:
-      - ./emms:/var/www/html/emms
-      - ./service-desk:/var/www/html/service-desk
+      - ./projects/emms:/var/www/html/emms
+      - ./projects/service-desk:/var/www/html/service-desk
     networks:
       - laravel_network
     depends_on:
       - nginx
     ports:
       - 8000:8000
-
-  # PHP-FPM service for the 'emms' project.
-  # emms-php:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.php
-  #   container_name: emms-php
-  #   volumes:
-  #     - ./emms:/var/www/html/emms
-  #   networks:
-  #     - laravel_network
-  
-  # # PHP-FPM service for the 'eems' project.
-  # eems-php:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.php
-  #   container_name: eems-php
-  #   volumes:
-  #     - ./eems:/var/www/html/eems
-  #   networks:
-  #     - laravel_network
 
   # The PostgreSQL database service.
   postgres:
@@ -98,7 +74,7 @@ services:
     image: node:22-alpine
     container_name: node
     volumes: 
-      - ./:/var/www/html
+      - ./projects:/var/www/html
     working_dir: /var/www/html
     command: tail -f /dev/null
     # for php 8.4
