@@ -8,6 +8,7 @@ services:
     volumes:
       - ./ees:/var/www/html/ees
       - ./emms:/var/www/html/emms
+      - ./service-desk:/var/www/html/service-desk
       
       - ./nginx/sites-enabled:/etc/nginx/conf.d
     depends_on:
@@ -17,24 +18,25 @@ services:
       - laravel_network
 
   # PHP-FPM service for the 'ees' project.
-  ees-php:
+  php-82:
     build:
       context: .
       dockerfile: Dockerfile.php
-    container_name: ees-php
+    container_name: php-82
     volumes:
       - ./ees:/var/www/html/ees
     networks:
       - laravel_network
     depends_on:
       - nginx
-  emms-php:
+  php-84:
     build:
       context: .
       dockerfile: Dockerfile.php-84
-    container_name: emms-php
+    container_name: php-84
     volumes:
       - ./emms:/var/www/html/emms
+      - ./service-desk:/var/www/html/service-desk
     networks:
       - laravel_network
     depends_on:
@@ -95,13 +97,13 @@ services:
   node:
     image: node:22-alpine
     container_name: node
-    volumes:
-      # Map the local 'ees' directory to the container
+    volumes: 
       - ./:/var/www/html
-    # Set the working directory to the project root for commands
     working_dir: /var/www/html
-    # Keep the container running so you can execute commands inside it
     command: tail -f /dev/null
+    # for php 8.4
+    # cd to project
+    #npm install && npm run dev -- --host 0.0.0.0
     networks:
       - laravel_network
     ports:
