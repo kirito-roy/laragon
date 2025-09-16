@@ -8,7 +8,7 @@ services:
     volumes:
       - ./projects/ees:/var/www/html/ees
       - ./projects/emms:/var/www/html/emms
-      - ./projects/jobAttendence:/var/www/html/jobAttendeance
+      # - ./projects/jobAttendance:/var/www/html/jobAttendance
       # - ./projects/service-desk:/var/www/html/service-desk
       
       - ./nginx/sites-enabled:/etc/nginx/conf.d
@@ -36,7 +36,7 @@ services:
     volumes:
       - ./projects/emms:/var/www/html/emms
       # - ./projects/service-desk:/var/www/html/service-desk
-      - ./projects/jobAttendence:/var/www/html/jobAttendeance
+      # - ./projects/jobAttendance:/var/www/html/jobAttendance
     networks:
       - laravel_network
     depends_on:
