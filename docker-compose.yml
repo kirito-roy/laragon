@@ -1,65 +1,117 @@
 services:
-  # The Nginx service to serve your Laravel project.
+  # This service runs once to generate Nginx configs and SSL certs.
+  setup:
+    build:
+      context: .
+      dockerfile: Dockerfile.setup
+    container_name: laragon-setup
+    volumes:
+      # Mount the sites list, and the output directories for configs and certs
+      - ./sites.txt:/app/sites.txt
+      - ./nginx/sites-enabled:/etc/nginx/conf.d
+      - ./nginx/ssl:/etc/nginx/ssl
+      # Mount the CA directory to persist the root certificate
+      - ./mkcert-ca:/root/.local/share/mkcert
+      # Mount the script itself so changes are reflected without rebuilding
+      - ./auto-setup.sh:/usr/local/bin/auto-setup.sh
+    networks:
+      - laravel_network
+
   nginx:
     image: nginx:alpine
     container_name: laragon-multi-nginx
     ports:
       - "80:80"
+      - "443:443"
     volumes:
-      - ./projects/ees:/var/www/html/ees
-      - ./projects/emms:/var/www/html/emms
-      # - ./projects/jobAttendance:/var/www/html/jobAttendance
-      - ./projects/service-desk:/var/www/html/service-desk
-      
+      - ./projects:/var/www/html
       - ./nginx/sites-enabled:/etc/nginx/conf.d
+      - ./nginx/ssl:/etc/nginx/ssl
+      # This service will wait for the 'setup' service to complete successfully.
     depends_on:
-      - postgres
+      setup:
+        condition: service_completed_successfully
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - laravel_network
 
   php-82:
     build:
       context: .
-      dockerfile: Dockerfile.php
+      dockerfile: Dockerfile.php-82
+      args:
+        - PUID=${PUID:-1000}
+        - PGID=${PGID:-1000}
     container_name: php-82
     volumes:
-      - ./projects/ees:/var/www/html/ees
+      - ./projects:/var/www/html
     networks:
       - laravel_network
-    depends_on:
-      - nginx
   php-84:
     build:
       context: .
       dockerfile: Dockerfile.php-84
+      args:
+        - PUID=${PUID:-1000}
+        - PGID=${PGID:-1000}
     container_name: php-84
     volumes:
-      - ./projects/emms:/var/www/html/emms
-      - ./projects/service-desk:/var/www/html/service-desk
-      # - ./projects/jobAttendance:/var/www/html/jobAttendance
+      - ./projects:/var/www/html
     networks:
       - laravel_network
-    depends_on:
-      - nginx
     ports:
       - 8000:8000
 
+  php-85:
+    build:
+      context: .
+      dockerfile: Dockerfile.php-85
+      args:
+        - PUID=${PUID:-1000}
+        - PGID=${PGID:-1000}
+    container_name: php-85
+    volumes:
+      - ./projects:/var/www/html
+
+    networks:
+      - laravel_network
+    ports:
+      - "8085:8000"
+
   # The PostgreSQL database service.
   postgres:
-    image:  postgis/postgis:15-master #wodby/postgres:$POSTGRES_TAG
+    image: postgis/postgis:17-master #wodby/postgres:$POSTGRES_TAG
     container_name: laragon-postgres
-    command: ["postgres", "-c", "log_statement=all", "-c", "log_destination=stderr"]
+    shm_size: 2gb
+    command: [ "postgres", "-c", "log_statement=all", "-c", "log_destination=stderr" ]
     restart: always
     environment:
-      POSTGRES_USER: ees
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: root
     volumes:
       - ./postgres_data:/var/lib/postgresql/data
-      # - ./postgres-init:/docker-entrypoint-initdb.d # Place init file(s) here.
+      - ./postgres-init:/docker-entrypoint-initdb.d # Place init file(s) here.
     networks:
       - laravel_network
     ports:
       - "5432:5432"
+
+  # pgadmin:
+  #   image: dpage/pgadmin4:latest
+  #   container_name: laragon-pgadmin
+  #   restart: always
+  #   environment:
+  #     PGADMIN_DEFAULT_EMAIL: pgadmin@localhost
+  #     PGADMIN_DEFAULT_PASSWORD: root
+  #   volumes:
+  #     - ./pgadmin_data:/var/lib/pgadmin
+  #   networks:
+  #     - laravel_network
+  #   ports:
+  #     - "8080:80"
+  #   depends_on:
+  #     - postgres
 
   # The MySQL database service.
   # mysql:
@@ -102,24 +154,38 @@ services:
     ports:
       - "6379:6379"
 
-
-  # The Node.js service for asset compilation.
-  node:
-    image: node:22-alpine
-    container_name: node
-    volumes: 
-      - ./projects:/var/www/html
-    working_dir: /var/www/html
-    command: tail -f /dev/null
-    # for php 8.4
-    # cd to project
-    #npm install && npm run dev -- --host 0.0.0.0
+  # The RabbitMQ service for message queueing.
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: laragon-rabbitmq
+    restart: always
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
     networks:
       - laravel_network
-    ports:
-      - "5173:5173"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+  # The Node.js service for asset compilation.
+  # node:
+  #   image: node:24
+  #   container_name: node
+  #   volumes:
+  #     - ./projects:/var/www/html
+  #   working_dir: /var/www/html
+  #   command: tail -f /dev/null
+  #   # for php 8.4
+  #   # cd to project
+  #   #npm install && npm run dev -- --host 0.0.0.0
+  #   networks:
+  #     - laravel_network
+  #   ports:
+  #     - "5173:5173"
 
-# Defines a custom network for all services
+  # Defines a custom network for all services
 networks:
   laravel_network:
     driver: bridge
@@ -128,6 +194,10 @@ networks:
 volumes:
   postgres_data:
     driver: local
+  rabbitmq_data:
+    driver: local
+  # pgadmin_data:
+  #   driver: local
   # mysql_data:
   #   driver: local
   # mongo_data:

@@ -1,5 +1,5 @@
-# Use the official PHP 8.4 FPM image, which is based on Debian
-FROM php:8.4-fpm
+# Use the official PHP 8.2 FPM image, which is based on Debian
+FROM php:8.2-fpm
 
 WORKDIR /var/www/html
 
@@ -10,12 +10,10 @@ COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr
 RUN install-php-extensions \
     amqp \
     bcmath \
-    curl \
     exif \
     gd \
     imagick \
     intl \
-    mbstring \
     memcached \
     opcache \
     pcntl \
@@ -25,7 +23,6 @@ RUN install-php-extensions \
     redis \
     soap \
     sockets \
-    xml \
     xsl \
     zip
 

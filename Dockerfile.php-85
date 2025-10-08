@@ -1,31 +1,26 @@
-# Use the official PHP 8.4 FPM image, which is based on Debian
-FROM php:8.4-fpm
+# Use the official PHP 8.5 FPM image, which is based on Debian
+FROM php:8.5-fpm
 
 WORKDIR /var/www/html
 
 # Install the extension manager
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
 
-# Install all extensions cleanly
+# Install all extensions cleanly (including Swoole)
 RUN install-php-extensions \
     amqp \
     bcmath \
-    curl \
     exif \
     gd \
     imagick \
     intl \
-    mbstring \
     memcached \
-    opcache \
     pcntl \
-    pdo_mysql \
     pdo_pgsql \
-    pdo_sqlite \
     redis \
     soap \
     sockets \
-    xml \
+    swoole \
     xsl \
     zip
 

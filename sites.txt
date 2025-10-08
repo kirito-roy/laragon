@@ -1,0 +1,7 @@
+https://upms.localhost(php-82)
+https://service-desk.localhost(php-84)
+https://ees.localhost(php-82)
+https://eems.localhost(php-84)
+
+
+
