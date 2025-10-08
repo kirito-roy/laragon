@@ -1,0 +1,18 @@
+# Use a lightweight Alpine image for efficiency
+FROM alpine:latest
+
+# Install dependencies: wget to download mkcert, and nss-tools which is required by mkcert
+RUN apk add --no-cache wget nss-tools bash
+
+# Download and install the mkcert binary directly for reliability
+RUN wget https://github.com/FiloSottile/mkcert/releases/download/v1.4.4/mkcert-v1.4.4-linux-amd64 -O /usr/local/bin/mkcert && \
+    chmod +x /usr/local/bin/mkcert
+
+# Copy the setup script into the container
+COPY auto-setup.sh /usr/local/bin/auto-setup.sh
+
+# Make the script executable
+RUN chmod +x /usr/local/bin/auto-setup.sh
+
+# The command that will be run when the container starts
+CMD ["/usr/local/bin/auto-setup.sh"]

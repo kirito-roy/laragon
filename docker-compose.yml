@@ -1,19 +1,38 @@
 services:
-  # The Nginx service to serve your Laravel project.
+  # This service runs once to generate Nginx configs and SSL certs.
+  setup:
+    build:
+      context: .
+      dockerfile: Dockerfile.setup
+    container_name: laragon-setup
+    volumes:
+      # Mount the sites list, and the output directories for configs and certs
+      - ./sites.txt:/app/sites.txt:ro
+      - ./nginx/sites-enabled:/etc/nginx/conf.d
+      - ./nginx/ssl:/etc/nginx/ssl
+      # Mount the CA directory to persist the root certificate
+      - ./mkcert-ca:/root/.local/share/mkcert
+    networks:
+      - laravel_network
+
   nginx:
     image: nginx:alpine
     container_name: laragon-multi-nginx
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./projects/ees:/var/www/html/ees
-      - ./projects/emms:/var/www/html/emms
+      # - ./projects/emms:/var/www/html/emms
       # - ./projects/jobAttendance:/var/www/html/jobAttendance
-      - ./projects/service-desk:/var/www/html/service-desk
+      # - ./projects/service-desk:/var/www/html/service-desk
       
       - ./nginx/sites-enabled:/etc/nginx/conf.d
+      - ./nginx/ssl:/etc/nginx/ssl
+      # This service will wait for the 'setup' service to complete successfully.
     depends_on:
-      - postgres
+      setup:
+        condition: service_completed_successfully
     networks:
       - laravel_network
 
@@ -26,23 +45,19 @@ services:
       - ./projects/ees:/var/www/html/ees
     networks:
       - laravel_network
-    depends_on:
-      - nginx
-  php-84:
-    build:
-      context: .
-      dockerfile: Dockerfile.php-84
-    container_name: php-84
-    volumes:
-      - ./projects/emms:/var/www/html/emms
-      - ./projects/service-desk:/var/www/html/service-desk
-      # - ./projects/jobAttendance:/var/www/html/jobAttendance
-    networks:
-      - laravel_network
-    depends_on:
-      - nginx
-    ports:
-      - 8000:8000
+  # php-84:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.php-84
+  #   container_name: php-84
+  #   volumes:
+  #     - ./projects/emms:/var/www/html/emms
+  #     - ./projects/service-desk:/var/www/html/service-desk
+  #     # - ./projects/jobAttendance:/var/www/html/jobAttendance
+  #   networks:
+  #     - laravel_network
+  #   ports:
+  #     - 8000:8000
 
   # The PostgreSQL database service.
   postgres:
@@ -108,7 +123,8 @@ services:
     image: node:22-alpine
     container_name: node
     volumes: 
-      - ./projects:/var/www/html
+      # - ./projects:/var/www/html
+      - ./projects/ees:/var/www/html/ees
     working_dir: /var/www/html
     command: tail -f /dev/null
     # for php 8.4
