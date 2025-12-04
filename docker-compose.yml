@@ -7,7 +7,7 @@ services:
     container_name: laragon-setup
     volumes:
       # Mount the sites list, and the output directories for configs and certs
-      - ./sites.txt:/app/sites.txt:ro
+      - ./sites.txt:/app/sites.txt
       - ./nginx/sites-enabled:/etc/nginx/conf.d
       - ./nginx/ssl:/etc/nginx/ssl
       # Mount the CA directory to persist the root certificate
@@ -23,10 +23,14 @@ services:
       - "443:443"
     volumes:
       - ./projects/ees:/var/www/html/ees
+      - ./projects/upms:/var/www/html/upms
       # - ./projects/emms:/var/www/html/emms
       # - ./projects/jobAttendance:/var/www/html/jobAttendance
       # - ./projects/service-desk:/var/www/html/service-desk
+      # - ./projects/laravel-project:/var/www/html/laravel-project
+      - ./projects/paw-backend:/var/www/html/paw-backend
       
+
       - ./nginx/sites-enabled:/etc/nginx/conf.d
       - ./nginx/ssl:/etc/nginx/ssl
       # This service will wait for the 'setup' service to complete successfully.
@@ -43,34 +47,37 @@ services:
     container_name: php-82
     volumes:
       - ./projects/ees:/var/www/html/ees
+      - ./projects/upms:/var/www/html/upms
     networks:
       - laravel_network
-  # php-84:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.php-84
-  #   container_name: php-84
-  #   volumes:
-  #     - ./projects/emms:/var/www/html/emms
-  #     - ./projects/service-desk:/var/www/html/service-desk
-  #     # - ./projects/jobAttendance:/var/www/html/jobAttendance
-  #   networks:
-  #     - laravel_network
-  #   ports:
-  #     - 8000:8000
+  php-84:
+    build:
+      context: .
+      dockerfile: Dockerfile.php-84
+    container_name: php-84
+    volumes:
+      # - ./projects/laravel-project:/var/www/html/laravel-project
+      - ./projects/paw-backend:/var/www/html/paw-backend
+      # - ./projects/emms:/var/www/html/emms
+      # - ./projects/service-desk:/var/www/html/service-desk
+      # - ./projects/jobAttendance:/var/www/html/jobAttendance
+    networks:
+      - laravel_network
+    ports:
+      - 8000:8000
 
   # The PostgreSQL database service.
   postgres:
-    image:  postgis/postgis:15-master #wodby/postgres:$POSTGRES_TAG
+    image:  postgis/postgis:17-master #wodby/postgres:$POSTGRES_TAG
     container_name: laragon-postgres
     command: ["postgres", "-c", "log_statement=all", "-c", "log_destination=stderr"]
     restart: always
     environment:
-      POSTGRES_USER: ees
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: root
     volumes:
       - ./postgres_data:/var/lib/postgresql/data
-      # - ./postgres-init:/docker-entrypoint-initdb.d # Place init file(s) here.
+      - ./postgres-init:/docker-entrypoint-initdb.d # Place init file(s) here.
     networks:
       - laravel_network
     ports:
@@ -120,11 +127,16 @@ services:
 
   # The Node.js service for asset compilation.
   node:
-    image: node:22-alpine
+    image: node:22
     container_name: node
     volumes: 
       # - ./projects:/var/www/html
       - ./projects/ees:/var/www/html/ees
+      - ./projects/upms:/var/www/html/upms
+      # - ./projects/emms:/var/www/html/emms
+      # - ./projects/service-desk:/var/www/html/service-desk
+      # - ./projects/jobAttendance:/var/www/html/jobAttendance
+      # - ./projects/laravel-project:/var/www/html/laravel-project
     working_dir: /var/www/html
     command: tail -f /dev/null
     # for php 8.4
