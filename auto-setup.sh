@@ -34,6 +34,12 @@ if [ ! -f "$SITES_FILE" ]; then
     exit 1
 fi
 
+echo "[INFO] Cleaning up old configurations..."
+# Remove all .conf files except 00-default.conf to preserve the dashboard
+find "$NGINX_SITES_DIR" -type f -name "*.conf" ! -name "00-default.conf" -delete
+# Remove all generated SSL certificates
+rm -f "$NGINX_SSL_DIR"/*
+
 echo "[INFO] Reading domains from $SITES_FILE..."
 
 # Process each site from the input file

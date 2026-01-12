@@ -58,6 +58,7 @@ services:
     volumes:
       # - ./projects/laravel-project:/var/www/html/laravel-project
       - ./projects/paw-backend:/var/www/html/paw-backend
+      # - ./projects/shhh-backend:/var/www/html/shhh-backend
       # - ./projects/emms:/var/www/html/emms
       # - ./projects/service-desk:/var/www/html/service-desk
       # - ./projects/jobAttendance:/var/www/html/jobAttendance
@@ -133,6 +134,7 @@ services:
       # - ./projects:/var/www/html
       - ./projects/ees:/var/www/html/ees
       - ./projects/upms:/var/www/html/upms
+      # - ./projects/shhh_chat:/var/www/html/shhh_chat
       # - ./projects/emms:/var/www/html/emms
       # - ./projects/service-desk:/var/www/html/service-desk
       # - ./projects/jobAttendance:/var/www/html/jobAttendance
