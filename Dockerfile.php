@@ -42,7 +42,7 @@ RUN apk add --no-cache --virtual .build-deps \
     && apk del .build-deps
 
 # Configure PHP memory limit
-RUN echo "memory_limit=512M" > /usr/local/etc/php/conf.d/memory-limit.ini
+RUN echo "memory_limit=2048M" > /usr/local/etc/php/conf.d/memory-limit.ini
 
 # Set a non-root user
 RUN addgroup -g 1000 laravel && adduser -u 1000 -G laravel -s /bin/sh -D laravel

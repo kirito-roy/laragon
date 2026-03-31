@@ -58,6 +58,9 @@ RUN apt-get update && \
 RUN groupadd -g 1000 laravel && \
     useradd -u 1000 -g laravel -s /bin/bash -m laravel
 
+# Configure PHP memory limit
+RUN echo "memory_limit=2048M" > /usr/local/etc/php/conf.d/memory-limit.ini
+
 # Switch to the non-root user
 USER laravel
 

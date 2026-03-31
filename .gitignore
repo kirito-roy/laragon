@@ -3,6 +3,7 @@ postgres-init
 postgres_data
 
 projects/*
+SQL
 !projects/README.md
 
 nginx

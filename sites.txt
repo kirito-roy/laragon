@@ -1,3 +1,3 @@
 http://ees.test(php-82)
-http://upms.test(php-82)
-http://paw-backend.test(php-84)
+
+
