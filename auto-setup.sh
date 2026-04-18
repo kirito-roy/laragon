@@ -34,13 +34,50 @@ if [ ! -f "$SITES_FILE" ]; then
     exit 1
 fi
 
-echo "[INFO] Cleaning up old configurations..."
-# Remove all .conf files except 00-default.conf to preserve the dashboard
-find "$NGINX_SITES_DIR" -type f -name "*.conf" ! -name "00-default.conf" -delete
-# Remove all generated SSL certificates
-rm -f "$NGINX_SSL_DIR"/*
+# --- Identify Active Domains ---
+# Create a temporary file to store domains found in sites.txt
+ACTIVE_DOMAINS_FILE=$(mktemp)
+while IFS= read -r site_url || [ -n "$site_url" ]; do
+    if [ -z "$site_url" ]; then
+        continue
+    fi
+    # Extract domain, removing protocol and (php-xx) part, and trimming whitespace
+    domain=$(echo "$site_url" | sed -e 's|^[^/]*//||' -e 's/(.*//' | tr -d ' \r\n\t')
+    echo "$domain" >> "$ACTIVE_DOMAINS_FILE"
+done < "$SITES_FILE"
 
-echo "[INFO] Reading domains from $SITES_FILE..."
+echo "[INFO] Cleaning up orphaned configurations..."
+
+# Remove SSL certificates for domains no longer in sites.txt
+if [ -d "$NGINX_SSL_DIR" ]; then
+    for cert in "$NGINX_SSL_DIR"/*.crt; do
+        [ -e "$cert" ] || continue
+        domain=$(basename "$cert" .crt)
+        if ! grep -qxw "$domain" "$ACTIVE_DOMAINS_FILE" > /dev/null; then
+            echo "[INFO] Removing unused certificate for $domain"
+            rm -f "$NGINX_SSL_DIR/$domain.crt" "$NGINX_SSL_DIR/$domain.key"
+        fi
+    done
+fi
+
+# Remove Nginx configs for domains no longer in sites.txt
+if [ -d "$NGINX_SITES_DIR" ]; then
+    for conf in "$NGINX_SITES_DIR"/*.conf; do
+        [ -e "$conf" ] || continue
+        filename=$(basename "$conf")
+        # Keep 00-default.conf
+        [ "$filename" = "00-default.conf" ] && continue
+        
+        domain=$(basename "$conf" .conf)
+        if ! grep -qxw "$domain" "$ACTIVE_DOMAINS_FILE" > /dev/null; then
+            echo "[INFO] Removing unused configuration for $domain"
+            rm -f "$conf"
+        fi
+    done
+fi
+rm "$ACTIVE_DOMAINS_FILE"
+
+echo "[INFO] Processing domains from $SITES_FILE..."
 
 # Process each site from the input file
 while IFS= read -r site_url || [ -n "$site_url" ]; do
@@ -49,8 +86,8 @@ while IFS= read -r site_url || [ -n "$site_url" ]; do
     fi
 
     protocol=$(echo "$site_url" | grep -o '^[a-z]*')
-    # Extract domain, removing protocol and (php-xx) part
-    domain=$(echo "$site_url" | sed -e 's|^[^/]*//||' -e 's/(.*//')
+    # Extract domain, removing protocol and (php-xx) part, and trimming whitespace
+    domain=$(echo "$site_url" | sed -e 's|^[^/]*//||' -e 's/(.*//' | tr -d ' \r\n\t')
     project_name=$(echo "$domain" | cut -d'.' -f1)
     conf_file="$NGINX_SITES_DIR/$domain.conf"
 
@@ -66,8 +103,12 @@ while IFS= read -r site_url || [ -n "$site_url" ]; do
 
     if [ "$protocol" = "https" ]; then
         # --- HTTPS Setup ---
-        echo "[INFO] Generating SSL certificate for $domain..."
-        mkcert -cert-file "$NGINX_SSL_DIR/$domain.crt" -key-file "$NGINX_SSL_DIR/$domain.key" "$domain"
+        if [ ! -f "$NGINX_SSL_DIR/$domain.crt" ] || [ ! -f "$NGINX_SSL_DIR/$domain.key" ]; then
+            echo "[INFO] Generating SSL certificate for $domain..."
+            mkcert -cert-file "$NGINX_SSL_DIR/$domain.crt" -key-file "$NGINX_SSL_DIR/$domain.key" "$domain"
+        else
+            echo "[INFO] Certificate for $domain already exists. Skipping generation."
+        fi
 
         echo "[INFO] Generating HTTPS Nginx config for $domain..."
         cat > "$conf_file" <<EOF
@@ -118,4 +159,4 @@ EOF
     echo "[SUCCESS] Setup complete for $domain."
 done < "$SITES_FILE"
 
-echo "[SUCCESS] All sites have been configured. The setup container will now exit."
+echo "[SUCCESS] Your environment is synchronized with sites.txt. The setup container will now exit."

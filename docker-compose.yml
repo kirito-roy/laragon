@@ -12,6 +12,8 @@ services:
       - ./nginx/ssl:/etc/nginx/ssl
       # Mount the CA directory to persist the root certificate
       - ./mkcert-ca:/root/.local/share/mkcert
+      # Mount the script itself so changes are reflected without rebuilding
+      - ./auto-setup.sh:/usr/local/bin/auto-setup.sh
     networks:
       - laravel_network
 
