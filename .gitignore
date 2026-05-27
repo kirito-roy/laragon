@@ -8,5 +8,5 @@ SQL
 
 nginx
 mkcert-ca
-desktop-app
+# desktop-app
 .antigravitycli

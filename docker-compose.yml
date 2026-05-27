@@ -24,7 +24,7 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./projects:/var/www/html
+      - ${PROJECTS_PATH:-./projects}:/var/www/html
       - ./nginx/sites-enabled:/etc/nginx/conf.d
       - ./nginx/ssl:/etc/nginx/ssl
       # This service will wait for the 'setup' service to complete successfully.
@@ -45,7 +45,7 @@ services:
         - PGID=${PGID:-1000}
     container_name: php-82
     volumes:
-      - ./projects:/var/www/html
+      - ${PROJECTS_PATH:-./projects}:/var/www/html
     networks:
       - laravel_network
   php-84:
@@ -57,7 +57,7 @@ services:
         - PGID=${PGID:-1000}
     container_name: php-84
     volumes:
-      - ./projects:/var/www/html
+      - ${PROJECTS_PATH:-./projects}:/var/www/html
     networks:
       - laravel_network
     ports:
@@ -72,7 +72,7 @@ services:
         - PGID=${PGID:-1000}
     container_name: php-85
     volumes:
-      - ./projects:/var/www/html
+      - ${PROJECTS_PATH:-./projects}:/var/www/html
 
     networks:
       - laravel_network
@@ -174,7 +174,7 @@ services:
   #   image: node:24
   #   container_name: node
   #   volumes:
-  #     - ./projects:/var/www/html
+  #     - ${PROJECTS_PATH:-./projects}:/var/www/html
   #   working_dir: /var/www/html
   #   command: tail -f /dev/null
   #   # for php 8.4

@@ -41,12 +41,25 @@ Laragon/
    *(Note: The entire `projects` folder is already mapped to the containers, so new projects are instantly available without editing `docker-compose.yml`!)*
 2. **Configure Database**: Setup your database user and password in your project's `.env` file (e.g., `postgres` database server is available at `postgres:5432` with username `postgres` and password `root`).
 3. **Register Site**: Add your site URL and desired PHP version mapping to `sites.txt`. Use `https` to take advantage of the auto-generated SSL certificates!
-   *We use the `.localhost` domain suffix because it automatically resolves to the local loopback (127.0.0.1) in modern web browsers, eliminating the need to edit hosts files.*
-
+   We use the `.test` domain suffix for local projects.
+   
    ```text
-   https://project_folder_name.localhost(php-82)
-   https://another_project.localhost(php-85)
+   https://project_folder_name.test(php-82)
+   https://another_project.test(php-85)
    ```
+
+4. **Map Domains in Hosts File**: Since `.test` domains do not automatically resolve on your host machine, you must map each registered domain to your local loopback address (`127.0.0.1`).
+   
+   Open your terminal on your host Linux system and run:
+   ```bash
+   sudo nano /etc/hosts
+   ```
+   Add the domain mappings at the end of the file:
+   ```text
+   127.0.0.1    project_folder_name.test
+   127.0.0.1    another_project.test
+   ```
+   *(Or run this quick command: `sudo bash -c "echo '127.0.0.1 project_folder_name.test' >> /etc/hosts"`)*
 
 ### 2. Starting the Environment
 
@@ -81,5 +94,5 @@ docker compose exec node sh
 Visit your secure local site directly in your browser:
 
 ```
-https://project_folder_name.localhost
+https://project_folder_name.test
 ```
