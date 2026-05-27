@@ -1,0 +1,46 @@
+.TH LARADOCK 1 "May 2026" "1.0" "LaraDock CLI Manual"
+.SH NAME
+laradock \- CLI utility to manage LaraDock Docker development environment
+.SH SYNOPSIS
+.B laradock
+.I command
+[\fIarguments\fR]
+.SH DESCRIPTION
+.B laradock
+is a command-line interface to manage the Docker-based multi-PHP development environment (similar to Windows Laragon) for Linux.
+.SH COMMANDS
+.TP
+.B list
+List all active registered projects and their PHP versions as configured in sites.txt.
+.TP
+.B add \fIdomain\fR [\fIphp-version\fR]
+Register a new local project site. Defaults to php-82 if PHP version is not specified.
+.TP
+.B remove \fIdomain\fR
+Deregister a project site, remove virtual host configs, certificates, and update hosts.
+.TP
+.B up
+Start all LaraDock containers in the background.
+.TP
+.B down
+Stop and remove all containers.
+.TP
+.B restart [\fIservice\fR]
+Restart all services, or a specific service (like nginx, postgres, etc.).
+.TP
+.B ssh \fIservice\fR
+Open an interactive shell inside a running container (e.g. php-82, node).
+.TP
+.B trust
+Trust the generated local Certificate Authority (CA) root certificate on the host system.
+.TP
+.B install
+Install the laradock CLI globally and link its man page.
+.TP
+.B uninstall
+Uninstall the global CLI, remove system mappings, and delete CA trust certificates.
+.SH FILES
+.I /home/kirito/laragon/sites.txt
+The registry containing active local websites.
+.SH AUTHOR
+Created by kirito roy.
