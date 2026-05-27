@@ -169,4 +169,39 @@ EOF
     echo "[SUCCESS] Setup complete for $domain."
 done < "$SITES_FILE"
 
+# --- Update Host's /etc/hosts file ---
+# This is possible because we mounted the host's /etc/hosts into the container.
+if [ -f "/etc/hosts" ]; then
+    echo "[INFO] Syncing host's /etc/hosts file with active domains..."
+    
+    BLOCK_START="# BEGIN LARADOCK DOMAINS"
+    BLOCK_END="# END LARADOCK DOMAINS"
+    
+    # Extract domains from sites.txt
+    DOMAINS_BLOCK=""
+    while IFS= read -r site_url || [ -n "$site_url" ]; do
+        if [ -z "$site_url" ]; then
+            continue
+        fi
+        # Extract domain, removing protocol and (php-xx) part, and trimming whitespace
+        domain=$(echo "$site_url" | sed -e 's|^[^/]*//||' -e 's/(.*//' | tr -d ' \r\n\t')
+        DOMAINS_BLOCK="${DOMAINS_BLOCK}\n127.0.0.1    ${domain}"
+    done < "$SITES_FILE"
+    
+    # Since /etc/hosts is a bind mount, 'sed -i' will fail with 'Device or resource busy'.
+    # We must write to a temp file first, then use 'cat' to overwrite it.
+    TEMP_HOSTS=$(mktemp)
+    sed "/$BLOCK_START/,/$BLOCK_END/d" /etc/hosts > "$TEMP_HOSTS"
+    echo -e "\n$BLOCK_START$DOMAINS_BLOCK\n$BLOCK_END" >> "$TEMP_HOSTS"
+    
+    # Overwrite /etc/hosts inside container (which updates the host's file directly)
+    cat "$TEMP_HOSTS" > /etc/hosts
+    rm "$TEMP_HOSTS"
+    
+    echo "[SUCCESS] Host's /etc/hosts updated."
+else
+    echo "[WARNING] /etc/hosts file not mounted or not found. Skipping auto-sync."
+fi
+
 echo "[SUCCESS] Your environment is synchronized with sites.txt. The setup container will now exit."
+

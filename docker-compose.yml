@@ -14,6 +14,8 @@ services:
       - ./mkcert-ca:/root/.local/share/mkcert
       # Mount the script itself so changes are reflected without rebuilding
       - ./auto-setup.sh:/usr/local/bin/auto-setup.sh
+      # Mount host hosts file to update it automatically
+      - /etc/hosts:/etc/hosts
     networks:
       - laravel_network
 
