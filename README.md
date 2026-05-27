@@ -105,12 +105,68 @@ https://service-desk.test(php-84)
 
 To launch the system, run this single command in the project root:
 
+## 🛠️ LaraDock CLI (The Premium Developer CLI Tool)
+
+Instead of manually editing configuration files or typing long Docker Compose commands, use the fully integrated, custom **LaraDock CLI** (`laradock`).
+
+### 1. Global System Installation
+
+Install the utility globally on your host machine so you can run it from **any directory** on your filesystem:
+
 ```bash
-docker compose up -d
+# Run this inside the LaraDock project root folder
+./laradock install
+```
+
+_You can now run `laradock` from anywhere! Restart your terminal shell or run `exec zsh` to activate rich Zsh autocompletions!_
+
+---
+
+### 2. Available Commands Reference
+
+| Command                                   | Action                                                                                   |
+| :---------------------------------------- | :--------------------------------------------------------------------------------------- |
+| **`laradock list`**                       | Lists all active registered projects and mapped PHP versions in a beautiful CLI table.   |
+| **`laradock add <domain> [php-version]`** | Register a new project and sync the environment. Defaults to `php-82`.                   |
+| **`laradock remove <domain>`**            | Deregister a project, clean Nginx configs, delete SSL certs, and sync hosts.             |
+| **`laradock up`**                         | Start all LaraDock containers in the background.                                         |
+| **`laradock down`**                       | Stop and remove all containers.                                                          |
+| **`laradock restart [service]`**          | Restart a specific service (e.g. `nginx`, `postgres`) or all services.                   |
+| **`laradock ssh <service>`**              | Shell instantly into a running container (e.g. `php-82`, `php-84`, `node`, `postgres`).  |
+| **`laradock trust`**                      | Trust the local SSL CA root certificate on your host machine.                            |
+| **`laradock uninstall`**                  | Remove the global CLI, delete man pages, clear trusted CAs, and wipe hosts file mapping. |
+
+---
+
+## 📖 User Manual & Setup Guide
+
+### 1. Registering a Project (The Modern Way)
+
+#### Step A: Place Project Folder
+
+Clone or place your project folder (e.g. `my-project`) inside the `./projects/` directory.
+
+#### Step B: Add Site via CLI
+
+```bash
+laradock add my-project.test php-84
 ```
 
 > [!NOTE]
-> The `setup` container will run first, parse `sites.txt`, dynamically issue trusted SSL certificates, write host-names to `/etc/hosts`, generate virtual Nginx server blocks, and trigger Nginx to load them safely!
+> This command automatically:
+>
+> 1. Registers the project with PHP 8.4 inside `sites.txt`.
+> 2. Runs the one-shot builder to compile custom trusted SSL certificates and Nginx config server blocks.
+> 3. Dynamically synchronizes your host's `/etc/hosts` file.
+> 4. Restarts Nginx to load the changes.
+
+#### Step C: Open in Browser
+
+Visit your secure project instantly:
+
+```text
+https://my-project.test
+```
 
 ---
 
@@ -120,25 +176,29 @@ To make your local browser fully trust the generated HTTPS `.test` domains witho
 
 Run the following command on your **host machine** to trust the newly generated Local CA:
 
+### 2. Activating Local SSL Trust (One-time Host Setup)
+
+To make your local host browser fully trust the generated HTTPS `.test` domains without security warnings:
+
 ```bash
-sudo cp ./mkcert-ca/rootCA.pem /usr/local/share/ca-certificates/mkcert_rootCA.crt && sudo update-ca-certificates
+laradock trust
 ```
 
 _If you are using Firefox, also import `./mkcert-ca/rootCA.pem` under `Firefox Settings -> Certificates -> View Certificates -> Authorities -> Import`._
 
 ---
 
-### 4. Running Composer & NPM Inside Docker
+### 3. Running Composer & NPM Inside Docker
 
 Always execute project dependencies inside the designated containers to keep your host environment clean.
 
 #### 🐘 Running Composer Commands
 
 ```bash
-# SSH into the PHP container of your choice
-docker compose exec php-82 sh
+# Shell instantly into the PHP container of your choice
+laradock ssh php-82
 
-# Navigate and run Composer inside the container
+# Navigate to your project folder inside the container and run Composer
 cd upms
 composer install
 ```
@@ -148,10 +208,10 @@ composer install
 If you have uncommented the `node` service in your `docker-compose.yml`:
 
 ```bash
-# SSH into the Node.js container
-docker compose exec node sh
+# Shell instantly into the Node.js container
+laradock ssh node
 
-# Navigate and run node scripts
+# Navigate and run NPM scripts
 cd upms
 npm install
 npm run dev
@@ -166,3 +226,12 @@ Open your browser and navigate directly to your secure URL:
 ```text
 https://upms.test
 ```
+
+### 4. Database Connection details
+
+Set up your database server connection in your project's `.env` file:
+
+- **Host:** `postgres`
+- **Port:** `5432`
+- **Username:** `postgres`
+- **Password:** `root`

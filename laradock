@@ -1,0 +1,390 @@
+#!/bin/bash
+
+# ==============================================================================
+# LaraDock CLI Utility
+# Created by kirito roy
+# ==============================================================================
+
+# Dynamic path resolution (works even when symlinked globally)
+SCRIPT_PATH=$(readlink -f "${BASH_SOURCE[0]}")
+SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
+SITES_FILE="$SCRIPT_DIR/sites.txt"
+
+# ANSI Terminal Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+BOLD='\033[1m'
+CHECKMARK='\033[0;32m\xE2\x9C\x94\033[0m'
+
+# Check if sites.txt exists
+if [ ! -f "$SITES_FILE" ]; then
+    touch "$SITES_FILE"
+fi
+
+# Print beautiful header
+function print_header() {
+    echo -e "${BOLD}${CYAN}⚡ LaraDock CLI Utility ⚡${NC}"
+}
+
+# Display help menu
+function show_help() {
+    print_header
+    echo -e "Usage: ${BOLD}laradock <command> [arguments]${NC}"
+    echo -e ""
+    echo -e "${BOLD}Commands:${NC}"
+    echo -e "  ${BOLD}${GREEN}list${NC}                        List all active registered projects and PHP versions"
+    echo -e "  ${BOLD}${GREEN}add <domain> [php-version]${NC}  Register a new project (Default PHP: php-82)"
+    echo -e "  ${BOLD}${GREEN}remove <domain>${NC}             Deregister a project and clean up configurations"
+    echo -e "  ${BOLD}${GREEN}up${NC}                          Start all LaraDock containers in the background"
+    echo -e "  ${BOLD}${GREEN}down${NC}                        Stop and remove all containers"
+    echo -e "  ${BOLD}${GREEN}restart [service]${NC}           Restart Nginx or a specific database service"
+    echo -e "  ${BOLD}${GREEN}ssh <service>${NC}                Open an interactive terminal inside a container (e.g. php-82, node)"
+    echo -e "  ${BOLD}${GREEN}trust${NC}                       Trust the local Root Certificate Authority (CA)"
+    echo -e "  ${BOLD}${GREEN}install${NC}                     Install this CLI globally as 'laradock' to your system"
+    echo -e "  ${BOLD}${GREEN}uninstall${NC}                   Remove the global CLI and clean up host configurations"
+
+    echo -e ""
+    echo -e "${BOLD}Examples:${NC}"
+    echo -e "  laradock add blog.test php-84"
+    echo -e "  laradock ssh php-82"
+    echo -e "  laradock restart nginx"
+    echo -e ""
+}
+
+# List active projects
+function cmd_list() {
+    print_header
+    echo -e "${CYAN}--------------------------------------------------------------------------------${NC}"
+    printf "${BOLD}%-20s %-35s %-15s${NC}\n" "Project Name" "Domain URL" "PHP Version"
+    echo -e "${CYAN}--------------------------------------------------------------------------------${NC}"
+    
+    count=0
+    while IFS= read -r line || [ -n "$line" ]; do
+        if [ -z "$line" ] || [[ "$line" =~ ^# ]]; then
+            continue
+        fi
+        
+        # Parse protocol, domain, and PHP version
+        domain=$(echo "$line" | sed -e 's|^[^/]*//||' -e 's/(.*//' | tr -d ' \r\n\t')
+        project_name=$(echo "$domain" | cut -d'.' -f1)
+        php_ver=$(echo "$line" | grep -o '(.*)' | tr -d '()')
+        if [ -z "$php_ver" ]; then
+            php_ver="php-82 (default)"
+        fi
+        
+        printf "%-20s %-35s %-15s\n" "$project_name" "https://$domain" "$php_ver"
+        count=$((count+1))
+    done < "$SITES_FILE"
+
+    if [ "$count" -eq 0 ]; then
+        echo -e "${YELLOW}No active projects registered. Add one using: laradock add <project>.test${NC}"
+    fi
+    echo -e "${CYAN}--------------------------------------------------------------------------------${NC}"
+}
+
+# Add project
+function cmd_add() {
+    if [ -z "$1" ]; then
+        echo -e "${RED}[ERROR] Missing domain parameter.${NC}"
+        echo -e "Usage: laradock add <domain> [php-version]"
+        exit 1
+    fi
+
+    local domain=$1
+    local php_ver=${2:-php-82}
+
+    # Clean domain input (strip protocols if provided)
+    domain=$(echo "$domain" | sed -e 's|^[^/]*//||' | tr -d ' \r\n\t')
+
+    # Validate PHP Version parameter matches available containers
+    if [[ ! "$php_ver" =~ ^(php-82|php-84|php-85)$ ]]; then
+        echo -e "${RED}[ERROR] Invalid PHP version: '$php_ver'.${NC}"
+        echo -e "Supported versions: ${BOLD}php-82, php-84, php-85${NC}"
+        exit 1
+    fi
+
+    # Check if domain already registered
+    if grep -qF "$domain" "$SITES_FILE"; then
+        echo -e "${YELLOW}[WARNING] Domain '$domain' is already registered in sites.txt.${NC}"
+        exit 0
+    fi
+
+    echo -e "${CYAN}[INFO] Registering https://$domain ($php_ver)...${NC}"
+    echo "https://$domain($php_ver)" >> "$SITES_FILE"
+    echo -e "${GREEN}${CHECKMARK} Appended to sites.txt successfully.${NC}"
+
+    # Sync and build changes
+    sync_environment
+}
+
+# Remove project
+function cmd_remove() {
+    if [ -z "$1" ]; then
+        echo -e "${RED}[ERROR] Missing domain parameter.${NC}"
+        echo -e "Usage: laradock remove <domain>"
+        exit 1
+    fi
+
+    local domain=$1
+    domain=$(echo "$domain" | sed -e 's|^[^/]*//||' | tr -d ' \r\n\t')
+
+    if ! grep -qF "$domain" "$SITES_FILE"; then
+        echo -e "${RED}[ERROR] Domain '$domain' is not registered in sites.txt.${NC}"
+        exit 1
+    fi
+
+    echo -e "${CYAN}[INFO] Deregistering $domain...${NC}"
+    
+    # Remove line from sites.txt
+    # Cross-platform safe in-place replacement
+    TEMP_FILE=$(mktemp)
+    grep -vF "$domain" "$SITES_FILE" > "$TEMP_FILE" || true
+    cat "$TEMP_FILE" > "$SITES_FILE"
+    rm "$TEMP_FILE"
+    
+    echo -e "${GREEN}${CHECKMARK} Removed from sites.txt successfully.${NC}"
+
+    # Sync environment to apply deletion (this deletes SSL certs and Nginx configs automatically)
+    sync_environment
+}
+
+# Helper: Build/Run Setup and reload Nginx
+function sync_environment() {
+    echo -e "${CYAN}[INFO] Triggering LaraDock Setup to compile SSL, update configs, and sync hosts...${NC}"
+    docker compose -f "$SCRIPT_DIR/docker-compose.yml" up -d --build setup
+    
+    echo -e "${CYAN}[INFO] Restarting Nginx to load changes...${NC}"
+    docker compose -f "$SCRIPT_DIR/docker-compose.yml" restart nginx
+    
+    echo -e "${GREEN}${CHECKMARK} Environment fully updated and synchronized!${NC}"
+}
+
+# Container SSH Shell wrapper
+function cmd_ssh() {
+    if [ -z "$1" ]; then
+        echo -e "${RED}[ERROR] Missing container service name.${NC}"
+        echo -e "Usage: laradock ssh <service>  (e.g., php-82, php-84, node, postgres)"
+        exit 1
+    fi
+
+    local service=$1
+    echo -e "${CYAN}[INFO] Connecting to container: $service...${NC}"
+    docker compose -f "$SCRIPT_DIR/docker-compose.yml" exec "$service" sh
+}
+
+# Start all docker containers
+function cmd_up() {
+    echo -e "${CYAN}[INFO] Spin up all LaraDock services...${NC}"
+    docker compose -f "$SCRIPT_DIR/docker-compose.yml" up -d
+    echo -e "${GREEN}${CHECKMARK} LaraDock is running in background.${NC}"
+}
+
+# Stop all docker containers
+function cmd_down() {
+    echo -e "${CYAN}[INFO] Bringing down all LaraDock services...${NC}"
+    docker compose -f "$SCRIPT_DIR/docker-compose.yml" down
+    echo -e "${GREEN}${CHECKMARK} LaraDock stopped.${NC}"
+}
+
+# Restart Docker containers
+function cmd_restart() {
+    local service=$1
+    if [ -n "$service" ]; then
+        echo -e "${CYAN}[INFO] Restarting service: $service...${NC}"
+        docker compose -f "$SCRIPT_DIR/docker-compose.yml" restart "$service"
+    else
+        echo -e "${CYAN}[INFO] Restarting all services...${NC}"
+        docker compose -f "$SCRIPT_DIR/docker-compose.yml" restart
+    fi
+    echo -e "${GREEN}${CHECKMARK} Restart completed.${NC}"
+}
+
+# Trust SSL Certificate Authority on host machine
+function cmd_trust() {
+    local ca_file="$SCRIPT_DIR/mkcert-ca/rootCA.pem"
+    if [ ! -f "$ca_file" ]; then
+        echo -e "${RED}[ERROR] Local CA rootCA.pem not found. Make sure the setup container has run at least once.${NC}"
+        exit 1
+    fi
+
+    echo -e "${CYAN}[INFO] Installing LaraDock Certificate Authority to host machine's trusted database...${NC}"
+    
+    # Check which distribution paths and tools are available
+    if [ -d "/etc/ca-certificates/trust-source/anchors" ] || which trust &>/dev/null; then
+        # Arch / Manjaro
+        sudo mkdir -p /etc/ca-certificates/trust-source/anchors
+        sudo cp "$ca_file" /etc/ca-certificates/trust-source/anchors/laradock_rootCA.crt
+        if which trust &>/dev/null; then
+            sudo trust extract-compat
+        elif which update-ca-certificates &>/dev/null; then
+            sudo update-ca-certificates
+        fi
+    elif [ -d "/etc/pki/ca-trust/source/anchors" ] || which update-ca-trust &>/dev/null; then
+        # Fedora / RHEL / CentOS
+        sudo mkdir -p /etc/pki/ca-trust/source/anchors
+        sudo cp "$ca_file" /etc/pki/ca-trust/source/anchors/laradock_rootCA.crt
+        if which update-ca-trust &>/dev/null; then
+            sudo update-ca-trust extract
+        fi
+    else
+        # Debian / Ubuntu / Suse / Alpine fallback
+        sudo mkdir -p /usr/local/share/ca-certificates
+        sudo cp "$ca_file" /usr/local/share/ca-certificates/laradock_rootCA.crt
+        if which update-ca-certificates &>/dev/null; then
+            sudo update-ca-certificates
+        else
+            echo -e "${YELLOW}[WARNING] No standard update-ca tool found. Certificates mapped to /usr/local/share/ca-certificates/laradock_rootCA.crt.${NC}"
+        fi
+    fi
+
+    echo -e "${GREEN}${CHECKMARK} Trust established on host system!${NC}"
+    echo -e "${YELLOW}[NOTE] If you use Firefox, you must still import this file manually inside Firefox certificate settings:${NC}"
+    echo -e "${BOLD}  $ca_file${NC}"
+}
+
+# Install globally on the host machine
+function cmd_install() {
+    echo -e "${CYAN}[INFO] Installing 'laradock' globally to /usr/local/bin...${NC}"
+    sudo ln -sf "$SCRIPT_PATH" /usr/local/bin/laradock
+    
+    # Install man page
+    if [ -f "$SCRIPT_DIR/laradock.1" ]; then
+        echo -e "${CYAN}[INFO] Installing 'laradock' manual page...${NC}"
+        sudo mkdir -p /usr/local/share/man/man1/
+        sudo ln -sf "$SCRIPT_DIR/laradock.1" /usr/local/share/man/man1/laradock.1
+        if which mandb &>/dev/null; then
+            sudo mandb &>/dev/null || true
+        fi
+    fi
+
+    # Install Bash autocompletion
+    if [ -f "$SCRIPT_DIR/laradock.bash" ]; then
+        if [ -d "/usr/share/bash-completion/completions" ]; then
+            echo -e "${CYAN}[INFO] Installing Bash autocompletion...${NC}"
+            sudo ln -sf "$SCRIPT_DIR/laradock.bash" /usr/share/bash-completion/completions/laradock
+        elif [ -d "/etc/bash_completion.d" ]; then
+            echo -e "${CYAN}[INFO] Installing Bash autocompletion (legacy path)...${NC}"
+            sudo ln -sf "$SCRIPT_DIR/laradock.bash" /etc/bash_completion.d/laradock
+        fi
+    fi
+
+    # Install Zsh autocompletion
+    if [ -f "$SCRIPT_DIR/_laradock" ]; then
+        if [ -d "/usr/local/share/zsh/site-functions" ]; then
+            echo -e "${CYAN}[INFO] Installing Zsh autocompletion (local)...${NC}"
+            sudo mkdir -p /usr/local/share/zsh/site-functions/
+            sudo ln -sf "$SCRIPT_DIR/_laradock" /usr/local/share/zsh/site-functions/_laradock
+            sudo chmod 644 /usr/local/share/zsh/site-functions/_laradock
+        elif [ -d "/usr/share/zsh/site-functions" ]; then
+            echo -e "${CYAN}[INFO] Installing Zsh autocompletion (system)...${NC}"
+            sudo ln -sf "$SCRIPT_DIR/_laradock" /usr/share/zsh/site-functions/_laradock
+            sudo chmod 644 /usr/share/zsh/site-functions/_laradock
+        fi
+    fi
+
+    # Install Fish autocompletion
+    if [ -f "$SCRIPT_DIR/laradock.fish" ]; then
+        if [ -d "/usr/share/fish/vendor_completions.d" ]; then
+            echo -e "${CYAN}[INFO] Installing Fish autocompletion...${NC}"
+            sudo ln -sf "$SCRIPT_DIR/laradock.fish" /usr/share/fish/vendor_completions.d/laradock.fish
+        elif [ -d "/etc/fish/completions" ]; then
+            echo -e "${CYAN}[INFO] Installing Fish autocompletion (etc path)...${NC}"
+            sudo ln -sf "$SCRIPT_DIR/laradock.fish" /etc/fish/completions/laradock.fish
+        fi
+    fi
+    
+    echo -e "${GREEN}${CHECKMARK} LaraDock CLI installed globally!${NC}"
+    echo -e "You can now run ${BOLD}laradock <command>${NC} from ANY directory on your system!"
+    echo -e "${YELLOW}[NOTE] Please restart your terminal shell (or run 'exec zsh' / 'exec bash' / 'exec fish') to activate autocompletion!${NC}"
+}
+
+# Uninstall globally from the host machine
+function cmd_uninstall() {
+    echo -e "${CYAN}[INFO] Uninstalling LaraDock global CLI and system configurations...${NC}"
+    
+    # 1. Clean up hosts mappings
+    local HOSTS_FILE="/etc/hosts"
+    local BLOCK_START="# BEGIN LARADOCK DOMAINS"
+    local BLOCK_END="# END LARADOCK DOMAINS"
+    if grep -q "$BLOCK_START" "$HOSTS_FILE" 2>/dev/null; then
+        echo -e "${CYAN}[INFO] Removing LaraDock domains from host's /etc/hosts file...${NC}"
+        TEMP_HOSTS=$(mktemp)
+        sudo sed "/$BLOCK_START/,/$BLOCK_END/d" "$HOSTS_FILE" > "$TEMP_HOSTS"
+        sudo cp "$TEMP_HOSTS" "$HOSTS_FILE"
+        rm "$TEMP_HOSTS"
+    fi
+
+    # 2. Clean up CA trust certs
+    echo -e "${CYAN}[INFO] Removing trusted Certificate Authority...${NC}"
+    sudo rm -f /usr/local/share/ca-certificates/laradock_rootCA.crt
+    sudo rm -f /etc/pki/ca-trust/source/anchors/laradock_rootCA.crt
+    sudo rm -f /etc/ca-certificates/trust-source/anchors/laradock_rootCA.crt
+    
+    if which trust &>/dev/null; then
+        sudo trust extract-compat
+    elif which update-ca-certificates &>/dev/null; then
+        sudo update-ca-certificates
+    elif which update-ca-trust &>/dev/null; then
+        sudo update-ca-trust extract
+    fi
+
+    # 3. Clean up symlinks, man page, and completions
+    echo -e "${CYAN}[INFO] Removing global symlinks, completions, and manual pages...${NC}"
+    sudo rm -f /usr/local/bin/laradock
+    sudo rm -f /usr/local/share/man/man1/laradock.1
+    sudo rm -f /usr/share/bash-completion/completions/laradock
+    sudo rm -f /etc/bash_completion.d/laradock
+    sudo rm -f /usr/local/share/zsh/site-functions/_laradock
+    sudo rm -f /usr/share/zsh/site-functions/_laradock
+    sudo rm -f /usr/share/fish/vendor_completions.d/laradock.fish
+    sudo rm -f /etc/fish/completions/laradock.fish
+
+    if which mandb &>/dev/null; then
+        sudo mandb &>/dev/null || true
+    fi
+
+    echo -e "${GREEN}${CHECKMARK} LaraDock CLI successfully uninstalled from host!${NC}"
+}
+
+# Main command dispatcher
+case "$1" in
+    list)
+        cmd_list
+        ;;
+    add)
+        cmd_add "$2" "$3"
+        ;;
+    remove)
+        cmd_remove "$2"
+        ;;
+    up)
+        cmd_up
+        ;;
+    down)
+        cmd_down
+        ;;
+    restart)
+        cmd_restart "$2"
+        ;;
+    ssh)
+        cmd_ssh "$2"
+        ;;
+    trust)
+        cmd_trust
+        ;;
+    install)
+        cmd_install
+        ;;
+    uninstall)
+        cmd_uninstall
+        ;;
+    *)
+        show_help
+        ;;
+esac
+
