@@ -130,7 +130,7 @@ server {
     ssl_certificate_key /etc/nginx/ssl/$domain.key;
 
     # Vite HMR and dev assets proxy
-    location ~* ^/(resources|node_modules|@vite|@id) {
+    location ~* ^/(resources/(css|js|fonts)|node_modules|@vite|@id) {
         proxy_pass http://host.docker.internal:5173;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
